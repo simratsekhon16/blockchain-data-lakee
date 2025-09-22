@@ -1,0 +1,33 @@
+# Docker volumes and data
+minio_data/
+postgres_data/
+
+# Generated configuration files (will be recreated by setup script)
+trino-config/
+
+# Local data samples (will be recreated)
+data-samples/
+
+# Jupyter notebook checkpoints
+notebooks/.ipynb_checkpoints/
+.ipynb_checkpoints/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
