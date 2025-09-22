@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # MinIO Object Storage
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"  # MinIO API
+      - "9001:9001"  # MinIO Console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  # PostgreSQL for Iceberg Catalog
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: iceberguser
+      POSTGRES_PASSWORD: icebergpass
+      POSTGRES_DB: iceberg
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Iceberg REST Catalog
+  iceberg-rest:
+    image: tabulario/iceberg-rest:0.6.0
+    container_name: iceberg-rest
+    ports:
+      - "8181:8181"
+    environment:
+      CATALOG_WAREHOUSE: s3://warehouse/
+      CATALOG_URI: jdbc:postgresql://postgres:5432/iceberg
+      CATALOG_JDBC_USER: iceberguser
+      CATALOG_JDBC_PASSWORD: icebergpass
+      CATALOG_S3_ENDPOINT: http://minio:9000
+      CATALOG_S3_ACCESS_KEY_ID: minioadmin
+      CATALOG_S3_SECRET_ACCESS_KEY: minioadmin123
+      CATALOG_S3_PATH_STYLE_ACCESS: true
+    depends_on:
+      - postgres
+      - minio
+
+  # Trino Coordinator
+  trino-coordinator:
+    image: trinodb/trino:435
+    container_name: trino-coordinator
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./trino-config:/etc/trino
+    environment:
+      TRINO_ENVIRONMENT: docker
+    depends_on:
+      - minio
+      - iceberg-rest
+
+  # Trino Worker (you can scale this)
+  trino-worker:
+    image: trinodb/trino:435
+    container_name: trino-worker
+    volumes:
+      - ./trino-config:/etc/trino
+    environment:
+      TRINO_ENVIRONMENT: docker
+    depends_on:
+      - trino-coordinator
+
+  # Jupyter Notebook for testing and development
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    container_name: jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      JUPYTER_ENABLE_LAB: "yes"
+      JUPYTER_TOKEN: "easy"
+    volumes:
+      - ./notebooks:/home/jovyan/work
+    depends_on:
+      - trino-coordinator
+
+volumes:
+  minio_data:
+  postgres_data:
+
+networks:
+  default:
+    name: datalake_network
